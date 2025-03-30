@@ -336,68 +336,58 @@ class OverlapPatchEmbed(nn.Module):
 class Restormer_Encoder(nn.Module):
     def __init__(self,
                  inp_channels=1,
-                 out_channels=1,
                  dim=64,
-                 num_blocks=[4, 4],
-                 heads=[8, 8, 8],
-                 ffn_expansion_factor=2,
-                 bias=False,
-                 LayerNorm_type='WithBias',
-                 ):
-
+                 bias=False):
         super(Restormer_Encoder, self).__init__()
 
         self.patch_embed = OverlapPatchEmbed(inp_channels, dim)
-
-        self.encoder_level1 = nn.Sequential(*[TransformerBlock(dim=dim, num_heads=heads[0], ffn_expansion_factor=ffn_expansion_factor,
-                                            bias=bias, LayerNorm_type=LayerNorm_type) for i in range(num_blocks[0])])
-        self.baseFeature = BaseFeatureExtraction(dim=dim, num_heads = heads[2])
         self.detailFeature = DetailFeatureExtraction()
              
     def forward(self, inp_img):
-        inp_enc_level1 = self.patch_embed(inp_img)
-        out_enc_level1 = self.encoder_level1(inp_enc_level1)
-        base_feature = self.baseFeature(out_enc_level1)
-        detail_feature = self.detailFeature(out_enc_level1)
-        return base_feature, detail_feature, out_enc_level1
+        x = self.patch_embed(inp_img)  # [B, C, H, W]
+        features = self.detailFeature(x)  # INN-блок
+        return features
 
 class Restormer_Decoder(nn.Module):
     def __init__(self,
-                 inp_channels=1,
                  out_channels=1,
                  dim=64,
-                 num_blocks=[4, 4],
-                 heads=[8, 8, 8],
+                 num_blocks=[4],
+                 heads=[8],
                  ffn_expansion_factor=2,
                  bias=False,
-                 LayerNorm_type='WithBias',
-                 ):
-
+                 LayerNorm_type='WithBias'):
         super(Restormer_Decoder, self).__init__()
-        self.reduce_channel = nn.Conv2d(int(dim*2), int(dim), kernel_size=1, bias=bias)
-        self.encoder_level2 = nn.Sequential(*[TransformerBlock(dim=dim, num_heads=heads[1], ffn_expansion_factor=ffn_expansion_factor,
-                                            bias=bias, LayerNorm_type=LayerNorm_type) for i in range(num_blocks[1])])
+
+        self.transform = nn.Sequential(*[
+            TransformerBlock(dim=dim,
+                             num_heads=heads[0],
+                             ffn_expansion_factor=ffn_expansion_factor,
+                             bias=bias,
+                             LayerNorm_type=LayerNorm_type)
+            for _ in range(num_blocks[0])
+        ])
+
         self.output = nn.Sequential(
-            nn.Conv2d(int(dim), int(dim)//2, kernel_size=3,
-                      stride=1, padding=1, bias=bias),
+            nn.Conv2d(dim, dim // 2, kernel_size=3, stride=1, padding=1, bias=bias),
             nn.LeakyReLU(),
-            nn.Conv2d(int(dim)//2, out_channels, kernel_size=3,
-                      stride=1, padding=1, bias=bias),)
-        self.sigmoid = nn.Sigmoid()              
-    def forward(self, inp_img, base_feature, detail_feature):
-        out_enc_level0 = torch.cat((base_feature, detail_feature), dim=1)
-        out_enc_level0 = self.reduce_channel(out_enc_level0)
-        out_enc_level1 = self.encoder_level2(out_enc_level0)
+            nn.Conv2d(dim // 2, out_channels, kernel_size=3, stride=1, padding=1, bias=bias)
+        )
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, inp_img, features):
+        x = self.transform(features)
+        x = self.output(x)
         if inp_img is not None:
-            out_enc_level1 = self.output(out_enc_level1) + inp_img
-        else:
-            out_enc_level1 = self.output(out_enc_level1)
-        return self.sigmoid(out_enc_level1), out_enc_level0
+            x = x + inp_img
+        return self.sigmoid(x)
     
 if __name__ == '__main__':
-    height = 128
-    width = 128
-    window_size = 8
     modelE = Restormer_Encoder().cuda()
     modelD = Restormer_Decoder().cuda()
+
+    dummy_input = torch.rand(1, 1, 128, 128).cuda()
+    features = modelE(dummy_input)
+    out = modelD(dummy_input, features)
+    print(out[0].shape)
 

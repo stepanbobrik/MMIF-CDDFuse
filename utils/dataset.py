@@ -1,7 +1,13 @@
+import os
+
 import torch.utils.data as Data
 import h5py
 import numpy as np
 import torch
+from PIL import Image
+from torch.utils.data import DataLoader
+import torchvision.transforms as T
+
 
 class H5Dataset(Data.Dataset):
     def __init__(self, h5file_path):
@@ -20,3 +26,60 @@ class H5Dataset(Data.Dataset):
         VIS = np.array(h5f['vis_patchs'][key])
         h5f.close()
         return torch.Tensor(VIS), torch.Tensor(IR)
+
+class WatermarkDataset(Data.Dataset):
+    def __init__(self, root_dir, transform=None):
+        """
+        root_dir — путь до 'dlnetEncoder32_9_40_alpha20'
+        transform — torchvision.transforms, например ToTensor()
+        """
+        self.root_dir = root_dir
+        self.transform = transform if transform else T.ToTensor()
+
+        self.watermarked_dir = os.path.join(root_dir, "watermarked")
+        self.compressed_dir = os.path.join(root_dir, "watermarked_lab", "jpeg50", "attacked_images")
+
+        self.pairs = []
+
+        # обходим все dir_XXX
+        for dir_name in sorted(os.listdir(self.watermarked_dir)):
+            wm_path = os.path.join(self.watermarked_dir, dir_name)
+            comp_path = os.path.join(self.compressed_dir, dir_name)
+
+            if not os.path.isdir(wm_path) or not os.path.isdir(comp_path):
+                continue
+
+            wm_images = sorted(os.listdir(wm_path))
+            comp_images = sorted(os.listdir(comp_path))
+
+            for wm_img, comp_img in zip(wm_images, comp_images):
+                self.pairs.append((
+                    os.path.join(comp_path, comp_img),  # input JPEG image
+                    os.path.join(wm_path, wm_img),      # target image with ЦВЗ
+                    comp_img                            # filename
+                ))
+
+    def __len__(self):
+        return len(self.pairs)
+
+    def __getitem__(self, idx):
+        comp_path, wm_path, name = self.pairs[idx]
+
+        comp_img = Image.open(comp_path).convert('L')
+        wm_img = Image.open(wm_path).convert('L')
+
+        comp_tensor = self.transform(comp_img)
+        wm_tensor = self.transform(wm_img)
+
+        return comp_tensor, wm_tensor, name
+
+if __name__ == "__main__":
+    dataset = WatermarkDataset(
+        root_dir=r"C:\Users\user\deep-image-prior\data\FullNS\dlnetEncoder32_9_40_alpha20"
+    )
+
+    loader = DataLoader(dataset, batch_size=1, shuffle=True)
+    i = 1
+    for x_input, x_target, name in loader:
+        print("JPEG:", x_input.shape, "ORIGINAL:", x_target.shape, "FILENAME:", name[0], i)
+        break
