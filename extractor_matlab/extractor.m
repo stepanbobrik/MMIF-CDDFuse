@@ -32,7 +32,7 @@ for d = 1:length(dirs)
         [image_d1, image_d2, ~] = size(image);
 
         try
-            test = rgb2gray(image);
+            test=im2gray(image(:,:,ccc));
         catch
             test = im2gray(image);
         end

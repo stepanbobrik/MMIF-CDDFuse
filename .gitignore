@@ -1,3 +1,5 @@
 .venv
 FullNS
 .idea
+/debug_images/
+/infered_images/

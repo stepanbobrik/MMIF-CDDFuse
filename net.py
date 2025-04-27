@@ -3,6 +3,7 @@ import torch.nn as nn
 import math
 import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
+from mpmath import sigmoid
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 from einops import rearrange
 
@@ -335,7 +336,7 @@ class OverlapPatchEmbed(nn.Module):
 
 class Restormer_Encoder(nn.Module):
     def __init__(self,
-                 inp_channels=1,
+                 inp_channels=3,
                  dim=64,
                  bias=False):
         super(Restormer_Encoder, self).__init__()
@@ -350,9 +351,9 @@ class Restormer_Encoder(nn.Module):
 
 class Restormer_Decoder(nn.Module):
     def __init__(self,
-                 out_channels=1,
+                 out_channels=3,
                  dim=64,
-                 num_blocks=[4],
+                 num_blocks=[6],
                  heads=[8],
                  ffn_expansion_factor=2,
                  bias=False,
@@ -378,9 +379,9 @@ class Restormer_Decoder(nn.Module):
     def forward(self, inp_img, features):
         x = self.transform(features)
         x = self.output(x)
-        if inp_img is not None:
-            x = x + inp_img
-        return self.sigmoid(x)
+        # if inp_img is not None:
+        #     x =
+        return x+inp_img
     
 if __name__ == '__main__':
     modelE = Restormer_Encoder().cuda()

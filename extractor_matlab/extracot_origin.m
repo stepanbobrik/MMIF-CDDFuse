@@ -66,7 +66,11 @@ sharpen=false;
 load('dlnetEncoder32_9_40.mat') % default
 dlnetDecoder=dlnetDecoder1;
 
-image = imread('\attacked_images\100.png');
+base_path = fileparts(mfilename('fullpath'));
+
+image_path = fullfile(base_path,'..', 'FullNS', 'dlnetEncoder32_9_40_alpha20', ...
+    'watermarked', 'dir_001', '100.png');
+image = imread(image_path);
 
 image_d1 = size(image, 1);
 image_d2 = size(image, 2);
@@ -92,4 +96,4 @@ m_test=extractdata(forward(dlnetDecoder, TEST_N));
 m_test=m_test(:,:);
 size(m_test)
 
-writematrix(m_test(:), '\attacked_images\100.xls');
+writematrix(m_test(:), '..\FullNS\100.xls');
